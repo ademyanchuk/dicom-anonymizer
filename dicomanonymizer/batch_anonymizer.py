@@ -20,14 +20,13 @@ from dicomanonymizer.utils import (
     LOGS_PATH,
     PROJ_ROOT,
     Path_Str,
-    create_if_not_exist,
     get_dirs,
     to_Path,
     try_valid_dir,
 )
 
 # setup logging (create dirs, if it is first time)
-create_if_not_exist(LOGS_PATH, parents=True, exist_ok=True)
+LOGS_PATH.mkdir(parents=True, exist_ok=True)
 logging.config.fileConfig(
     PROJ_ROOT / "dicomanonymizer/config/logging.ini",
     defaults={"logfilename": (LOGS_PATH / "file.log").as_posix()},
@@ -36,7 +35,7 @@ logging.config.fileConfig(
 logger = logging.getLogger(__name__)
 
 _STATE_PATH = Path.home() / ".dicomanonymizer/cache"
-create_if_not_exist(_STATE_PATH, parents=True)
+_STATE_PATH.mkdir(parents=True, exist_ok=True)
 
 
 def anonymize_dicom_folder(
@@ -57,7 +56,7 @@ def anonymize_dicom_folder(
     try_valid_dir(in_path)
 
     out_path = to_Path(out_path)
-    create_if_not_exist(out_path)
+    out_path.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Processing: {in_path}")
     # work itself
@@ -102,7 +101,7 @@ def anonymize_root_folder(in_root: Path_Str, out_root: Path_Str, **kwargs):
     in_root = to_Path(in_root)
     try_valid_dir(in_root)
     out_root = to_Path(out_root)
-    create_if_not_exist(out_root)
+    out_root.mkdir(parents=True, exist_ok=True)
     in_dirs = get_dirs(in_root)
 
     state = AnonState(_STATE_PATH)
