@@ -2,14 +2,14 @@ import logging
 import logging.config
 import re
 from random import randint
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import pydicom
 from pydicom.errors import InvalidDicomError
 
-from .dicomfields import *
+from .dicomfields import ACTION_TO_TAG_LIST
 from .format_tag import tag_to_hex_strings
-from .utils import Path_Str
+from .utils import ActionsDict, Path_Str, TagList, TagTuple
 
 dictionary = {}
 
@@ -297,7 +297,7 @@ def delete_or_empty_or_replace_UID(dataset: pydicom.Dataset, tag: Tuple[int, int
 
 # Generation functions
 
-actions_map_name_functions = {
+ACTIONS_MAP_NAME_FUNCTIONS = {
     "replace": replace,
     "empty": empty,
     "delete": delete,
@@ -308,57 +308,49 @@ actions_map_name_functions = {
     "delete_or_empty_or_replace": delete_or_empty_or_replace,
     "delete_or_empty_or_replace_UID": delete_or_empty_or_replace_UID,
     "keep": keep,
-    "regexp": regexp,
 }
 
 
-def generate_actions(tag_list: list, action, options: dict = None) -> dict:
-    """
-    Generate a dictionary using list values as tag and assign the same value to all
+def generate_actions(tag_list: TagList, action: str) -> ActionsDict:
+    """Generate a dictionary using list values as tag and assign
+    the same value to all
 
-    :param tag_list: list of tags which will have the same associated actions
-    :param action: define the action that will be use. It can be a callable custom function or a name of a pre-defined
-    action from simpledicomanonymizer.
-    :param options: Define options tht will be affected to the action (like regexp)
+    Args:
+        tag_list (TagList): List of tags to apply action
+        action (str): action type
+
+    Returns:
+        ActionsDict: mapping of tag -> required action callable
     """
-    final_action = action
-    if not callable(action):
-        final_action = (
-            actions_map_name_functions[action]
-            if action in actions_map_name_functions
-            else keep
-        )
-    if options is not None:
-        final_action = final_action(options)
+    assert isinstance(action, str) and action in ACTIONS_MAP_NAME_FUNCTIONS
+    final_action = ACTIONS_MAP_NAME_FUNCTIONS[action]
     return {tag: final_action for tag in tag_list}
 
 
-def initialize_actions() -> dict:
-    """Initialize anonymization actions with DICOM standard values
+def initialize_actions(
+    act_to_tag_list_map: Dict[str, TagList] = ACTION_TO_TAG_LIST
+) -> ActionsDict:
+    """Initialize a mapping of tag -> action func as required by
+    DICOM-standard basic de-identification profile
+
+    Args:
+        act_to_tag_list_map (Dict[str, TagList], optional): mapping of action
+        (as a str) -> list of tags. Defaults to ACTION_TO_TAG_LIST.
 
     Returns:
-        dict: mapping of tag -> action
+        ActionsDict: mapping of tag -> action function
     """
-    anonymization_actions = generate_actions(D_TAGS, replace)
-    anonymization_actions.update(generate_actions(Z_TAGS, empty))
-    anonymization_actions.update(generate_actions(X_TAGS, delete))
-    anonymization_actions.update(generate_actions(U_TAGS, replace_UID))
-    anonymization_actions.update(generate_actions(Z_D_TAGS, empty_or_replace))
-    anonymization_actions.update(generate_actions(X_Z_TAGS, delete_or_empty))
-    anonymization_actions.update(generate_actions(X_D_TAGS, delete_or_replace))
-    anonymization_actions.update(
-        generate_actions(X_Z_D_TAGS, delete_or_empty_or_replace)
-    )
-    anonymization_actions.update(
-        generate_actions(X_Z_U_STAR_TAGS, delete_or_empty_or_replace_UID)
-    )
+    anonymization_actions = {}
+    for act, tag_list in act_to_tag_list_map.items():
+        _dict = generate_actions(tag_list, act)
+        anonymization_actions.update(_dict)
     return anonymization_actions
 
 
 def anonymize_dicom_file(
     in_file: Path_Str,
     out_file: Path_Str,
-    extra_anonymization_rules: dict = None,
+    extra_anonymization_rules: Optional[ActionsDict] = None,
     delete_private_tags: bool = True,
     ds_callback: Optional[Callable[[pydicom.Dataset], None]] = None,
 ) -> None:
@@ -441,11 +433,13 @@ def get_private_tags(
     :return Array of object
     """
     private_tags = []
-    for tag, action in anonymization_actions.items():
+    for tag in anonymization_actions:
+        element = None
         try:
             element = dataset.get(tag)
-        except:
-            print("Cannot get element from tag: ", tag_to_hex_strings(tag))
+        except Exception as e:
+            logger.error("Cannot get element from tag: ", tag_to_hex_strings(tag))
+            logger.exception(e)
 
         if element and element.tag.is_private:
             private_tags.append(get_private_tag(dataset, tag))
@@ -455,7 +449,7 @@ def get_private_tags(
 
 def anonymize_dataset(
     dataset: pydicom.Dataset,
-    extra_anonymization_rules: dict = None,
+    extra_anonymization_rules: Optional[ActionsDict] = None,
     delete_private_tags: bool = True,
 ) -> None:
     """Anonymize a pydicom Dataset by using anonymization rules which links an action to a tag
