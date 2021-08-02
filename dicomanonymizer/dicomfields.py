@@ -296,14 +296,16 @@ X_Z_U_STAR_TAGS = [
     (0x0008, 0x2112),  # Source Image Sequence
 ]
 
-# Contains all previous tags into one array
-ALL_TAGS = []
-ALL_TAGS.extend(D_TAGS)
-ALL_TAGS.extend(Z_TAGS)
-ALL_TAGS.extend(X_TAGS)
-ALL_TAGS.extend(U_TAGS)
-ALL_TAGS.extend(Z_D_TAGS)
-ALL_TAGS.extend(X_Z_TAGS)
-ALL_TAGS.extend(X_D_TAGS)
-ALL_TAGS.extend(X_Z_D_TAGS)
-ALL_TAGS.extend(X_Z_U_STAR_TAGS)
+
+# define a dict with mapping of action -> tag_list
+ACTION_TO_TAG_LIST = {
+    "replace": D_TAGS,
+    "empty": Z_TAGS,
+    "delete": X_TAGS,
+    "replace_UID": U_TAGS,
+    "empty_or_replace": Z_D_TAGS,
+    "delete_or_empty": X_Z_TAGS,
+    "delete_or_replace": X_D_TAGS,
+    "delete_or_empty_or_replace": X_Z_D_TAGS,
+    "delete_or_empty_or_replace_UID": X_Z_U_STAR_TAGS,
+}
