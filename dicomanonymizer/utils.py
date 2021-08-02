@@ -1,8 +1,13 @@
-from typing import Union
 from pathlib import Path
+from typing import Callable, Dict, List, Tuple, Union
+
+import pydicom
 
 # Type defs
 Path_Str = Union[str, Path]
+TagTuple = Tuple[int, ...]
+TagList = List[TagTuple]
+ActionsDict = Dict[TagTuple, Callable[[pydicom.Dataset, TagTuple], None]]
 
 # Projects paths go here
 PROJ_ROOT = Path(__file__).parent.absolute().parent
