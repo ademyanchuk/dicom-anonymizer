@@ -6,28 +6,34 @@
 """
 
 import argparse
+import json
 import logging
 import logging.config
+import pathlib
 import random
 from pathlib import Path
+from typing import Optional
 
 import pydicom
 
 from dicomanonymizer.anonym_state import AnonState
 from dicomanonymizer.dicom_utils import fix_exposure
-from dicomanonymizer.simpledicomanonymizer import anonymize_dicom_file
+from dicomanonymizer.simpledicomanonymizer import (
+    anonymize_dicom_file,
+    initialize_actions,
+)
 from dicomanonymizer.utils import (
+    ActionsDict,
     LOGS_PATH,
     PROJ_ROOT,
     Path_Str,
-    create_if_not_exist,
     get_dirs,
     to_Path,
     try_valid_dir,
 )
 
 # setup logging (create dirs, if it is first time)
-create_if_not_exist(LOGS_PATH, parents=True, exist_ok=True)
+LOGS_PATH.mkdir(parents=True, exist_ok=True)
 logging.config.fileConfig(
     PROJ_ROOT / "dicomanonymizer/config/logging.ini",
     defaults={"logfilename": (LOGS_PATH / "file.log").as_posix()},
@@ -36,7 +42,36 @@ logging.config.fileConfig(
 logger = logging.getLogger(__name__)
 
 _STATE_PATH = Path.home() / ".dicomanonymizer/cache"
-create_if_not_exist(_STATE_PATH, parents=True)
+_STATE_PATH.mkdir(parents=True, exist_ok=True)
+
+
+def get_extra_rules(
+    use_extra: bool,
+    extra_json_path: Path_Str,
+) -> Optional[ActionsDict]:
+    """Helper to provide custom (project level/user level) anonymization
+    rules as a mapping of tags -> action function.
+
+    Args:
+        use_extra (bool): If use extra rules.
+        extra_json_path (Path_Str): Path to extra rules json file.
+        It should be flat json with action as a key and list of tags as value.
+
+    Returns:
+        Optional[ActionsDict]: extra rules mapping (tags -> action function)
+    """
+    # Define the actions dict for additional tags (customization)
+    extra_rules = None
+    if use_extra:
+        # default or user provided path to extra rules json file
+        with open(extra_json_path, "r") as fout:
+            extra_rules = json.load(fout)
+        for key in extra_rules:
+            tag_list = extra_rules[key]
+            tag_list = [tuple(elem) for elem in tag_list]
+            extra_rules[key] = tag_list
+        extra_rules = initialize_actions(extra_rules)
+    return extra_rules
 
 
 def anonymize_dicom_folder(
@@ -57,7 +92,7 @@ def anonymize_dicom_folder(
     try_valid_dir(in_path)
 
     out_path = to_Path(out_path)
-    create_if_not_exist(out_path)
+    out_path.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Processing: {in_path}")
     # work itself
@@ -88,7 +123,11 @@ def anonymize_dicom_folder(
                 raise e
 
 
-def anonymize_root_folder(in_root: Path_Str, out_root: Path_Str, **kwargs):
+def anonymize_root_folder(
+    in_root: Path_Str,
+    out_root: Path_Str,
+    **kwargs,
+):
     """The fuction will get all nested folders from `in_root`
     and perform anonymization of all folders containg dicom-files
     Will recreate the `in_root` folders structure in the `out_root`
@@ -102,7 +141,7 @@ def anonymize_root_folder(in_root: Path_Str, out_root: Path_Str, **kwargs):
     in_root = to_Path(in_root)
     try_valid_dir(in_root)
     out_root = to_Path(out_root)
-    create_if_not_exist(out_root)
+    out_root.mkdir(parents=True, exist_ok=True)
     in_dirs = get_dirs(in_root)
 
     state = AnonState(_STATE_PATH)
@@ -118,7 +157,6 @@ def anonymize_root_folder(in_root: Path_Str, out_root: Path_Str, **kwargs):
     logger.info(
         f"if, you need to process data again delete files {_STATE_PATH}, please"
     )
-
     # will try to process all folders, if exception will dump state before raising
     try:
         for in_d in in_dirs:
@@ -163,6 +201,16 @@ parser.add_argument(
     help="Process only one folder - folder or all nested folders - batch, default = batch",
 )
 parser.add_argument(
+    "--extra-rules",
+    default="",
+    help="Path to json file defining extra rules for additional tags. Defalult in project.",
+)
+parser.add_argument(
+    "--no-extra",
+    action="store_true",
+    help="Only use a rules from DICOM-standard basic de-id profile",
+)
+parser.add_argument(
     "--debug", action="store_true", help="Will do a dry run (one file per folder)"
 )
 parser.add_argument(
@@ -183,6 +231,12 @@ def main():
     in_path = Path(args.src)
     out_path = Path(args.dst)
     debug = args.debug
+
+    path = args.extra_rules
+    if not path:
+        path = PROJ_ROOT / "dicomanonymizer/resources/extra_rules.json"
+
+    extra_rules = get_extra_rules(use_extra=not args.no_extra, extra_json_path=path)
     # fix known issue with dicom
     fix_exposure()
     msg = f"""
@@ -192,9 +246,13 @@ def main():
     logger.info(msg)
     # anonymize
     if args.type == "batch":
-        anonymize_root_folder(in_path, out_path, debug=debug)
+        anonymize_root_folder(
+            in_path, out_path, debug=debug, extra_anonymization_rules=extra_rules
+        )
     elif args.type == "folder":
-        anonymize_dicom_folder(in_path, out_path, debug=debug)
+        anonymize_dicom_folder(
+            in_path, out_path, debug=debug, extra_anonymization_rules=extra_rules
+        )
     logger.info("Well done!")
 
 

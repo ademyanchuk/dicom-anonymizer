@@ -207,11 +207,6 @@ X_TAGS = [
     (0x0088, 0x0904),  # Topic Title
     (0x0040, 0xA027),  # Verifying Organization
     (0x0038, 0x4000),  # Visit Comments
-    # Customization
-    (0x0008, 0x0012),  # Instance Creation Date
-    (0x0008, 0x0013),  # Instance Creation Time
-    (0x0018, 0x1012),  # Date of Secondary Capture
-    (0x0018, 0x1014),  # Time of Secondary Capture
 ]
 
 # Replace UID
@@ -248,8 +243,6 @@ U_TAGS = [
     (0x0040, 0xDB0C),  # Template Extension Organization UID
     (0x0008, 0x1195),  # Transaction UID
     (0x0040, 0xA124),  # UID
-    # Customization
-    (0x0002, 0x0003),  # Media Storage SOP Instance UID
 ]
 
 # Replace element according to the VR
