@@ -330,7 +330,7 @@ def generate_actions(tag_list: TagList, action: str) -> ActionsDict:
 def initialize_actions(
     act_to_tag_list_map: Dict[str, TagList] = ACTION_TO_TAG_LIST
 ) -> ActionsDict:
-    """Initialize a mapping of tag -> action func as required by
+    """Initialize a mapping of tag -> action func. Default is as required by
     DICOM-standard basic de-identification profile
 
     Args:
