@@ -1,1 +1,2 @@
 include dicomanonymizer/config/*
+include dicomanonymizer/resources/*
