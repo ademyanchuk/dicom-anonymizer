@@ -207,11 +207,6 @@ X_TAGS = [
     (0x0088, 0x0904),  # Topic Title
     (0x0040, 0xA027),  # Verifying Organization
     (0x0038, 0x4000),  # Visit Comments
-    # Customization
-    (0x0008, 0x0012),  # Instance Creation Date
-    (0x0008, 0x0013),  # Instance Creation Time
-    (0x0018, 0x1012),  # Date of Secondary Capture
-    (0x0018, 0x1014),  # Time of Secondary Capture
 ]
 
 # Replace UID
@@ -294,14 +289,16 @@ X_Z_U_STAR_TAGS = [
     (0x0008, 0x2112),  # Source Image Sequence
 ]
 
-# Contains all previous tags into one array
-ALL_TAGS = []
-ALL_TAGS.extend(D_TAGS)
-ALL_TAGS.extend(Z_TAGS)
-ALL_TAGS.extend(X_TAGS)
-ALL_TAGS.extend(U_TAGS)
-ALL_TAGS.extend(Z_D_TAGS)
-ALL_TAGS.extend(X_Z_TAGS)
-ALL_TAGS.extend(X_D_TAGS)
-ALL_TAGS.extend(X_Z_D_TAGS)
-ALL_TAGS.extend(X_Z_U_STAR_TAGS)
+
+# define a dict with mapping of action -> tag_list
+ACTION_TO_TAG_LIST = {
+    "replace": D_TAGS,
+    "empty": Z_TAGS,
+    "delete": X_TAGS,
+    "replace_UID": U_TAGS,
+    "empty_or_replace": Z_D_TAGS,
+    "delete_or_empty": X_Z_TAGS,
+    "delete_or_replace": X_D_TAGS,
+    "delete_or_empty_or_replace": X_Z_D_TAGS,
+    "delete_or_empty_or_replace_UID": X_Z_U_STAR_TAGS,
+}

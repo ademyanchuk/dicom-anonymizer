@@ -2,14 +2,14 @@ import logging
 import logging.config
 import re
 from random import randint
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import pydicom
 from pydicom.errors import InvalidDicomError
 
-from .dicomfields import *
+from .dicomfields import ACTION_TO_TAG_LIST
 from .format_tag import tag_to_hex_strings
-from .utils import Path_Str
+from .utils import ActionsDict, Path_Str, TagList, TagTuple
 
 dictionary = {}
 
@@ -113,17 +113,27 @@ def replace_element(element):
         )
 
 
-def replace(dataset, tag):
-    """
-    D - replace with a non-zero length value that may be a dummy value and consistent with the
-    VR
+# NOTE: In case user want to add a tag from `file_meta` to de-id rules, we need to
+# try get tag from `file_meta` as well and only then to give up
+
+
+def replace(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """D - replace with a non-zero length value that may be a dummy value
+    and consistent with the VR
+
+    Args:
+        dataset (pydicom.Dataset): pydicom dataset to get `tag` element from
+        tag (Tuple[int, int]): tag is represented as a tuple of ints in hex notation
     """
     element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
+
     if element is not None:
         replace_element(element)
 
 
-def empty_element(element):
+def empty_element(element: pydicom.DataElement):
     """
     Clean element according to the element's VR:
     - SH, PN, UI, LO, CS: value will be set to ''
@@ -150,34 +160,54 @@ def empty_element(element):
         )
 
 
-def empty(dataset, tag):
-    """
-    Z - replace with a zero length value, or a non-zero length value that may be a dummy value and
-    consistent with the VR
+def empty(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """Z - replace with a zero length value, or a non-zero length
+    value that may be a dummy value and consistent with the VR
+
+    Args:
+        dataset (pydicom.Dataset): pydicom dataset to get `tag` element from
+        tag (Tuple[int, int]): tag is represented as a tuple of ints in hex notation
     """
     element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
     if element is not None:
         empty_element(element)
 
 
-def delete_element(dataset, element):
-    """
-    Delete the element from the dataset.
+def delete_element(dataset: pydicom.Dataset, element: pydicom.DataElement):
+    """Delete the element from the dataset.
     If VR's element is a date, then it will be replaced by 00010101
+
+    Args:
+        dataset (pydicom.Dataset): dataset to work with
+        element (pydicom.DataElement): dataelement to work with
     """
     if element.VR == "DA":
         replace_element_date(element)
-    elif element.VR == "SQ" and element.value is type(pydicom.Sequence):
+    elif element.VR == "SQ" and isinstance(element.value, pydicom.Sequence):
         for sub_dataset in element.value:
             for sub_element in sub_dataset.elements():
                 delete_element(sub_dataset, sub_element)
     else:
-        del dataset[element.tag]
+        # in case the tag is from file_meta
+        if hasattr(dataset, "file_meta") and element.tag in dataset.file_meta:
+            del dataset.file_meta[element.tag]
+        # in the rest of the header
+        else:
+            del dataset[element.tag]
 
 
-def delete(dataset, tag):
-    """X - remove"""
+def delete(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """X - remove
+
+    Args:
+        dataset (pydicom.Dataset): dataset to work with
+        tag (Tuple[int, int]): tag is represented as a tuple of ints in hex notation
+    """
     element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
     if element is not None:
         delete_element(dataset, element)  # element.tag is not the same type as tag.
 
@@ -187,21 +217,37 @@ def keep(dataset, tag):
     pass
 
 
-def clean(dataset, tag):
+def clean(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """C - clean, that is replace with values of similar meaning known
+    not to contain identifying information and consistent with the VR
+
+    Args:
+        dataset (pydicom.Dataset): pydicom dataset to get `tag` element from
+        tag (Tuple[int, int]): tag is represented as a tuple of ints in hex notation
+
+    Raises:
+        NotImplementedError: basic de-id profile of DICOM-standard does not require
+        cleaning of any tag. NOTE: might be implemented in the future
     """
-    C - clean, that is replace with values of similar meaning known not to contain identifying
-    information and consistent with the VR
-    """
-    if dataset.get(tag) is not None:
+    element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
+    if element is not None:
         raise NotImplementedError("Tag not anonymized. Not yet implemented.")
 
 
-def replace_UID(dataset, tag):
-    """
-    U - replace with a non-zero length UID that is internally consistent within a set of Instances
+def replace_UID(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """U - replace with a non-zero length UID that is internally consistent
+    within a set of Instances
     Lazy solution : Replace with empty string
+
+    Args:
+        dataset (pydicom.Dataset): dataset to work with
+        tag (Tuple[int, int]): tag in hex notation
     """
     element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
     if element is not None:
         replace_element_UID(element)
 
@@ -229,12 +275,19 @@ def delete_or_empty_or_replace(dataset, tag):
     replace(dataset, tag)
 
 
-def delete_or_empty_or_replace_UID(dataset, tag):
-    """
-    X/Z/U* - X unless Z or replacement of contained instance UIDs (U) is required to maintain IOD
-    conformance (Type 3 versus Type 2 versus Type 1 sequences containing UID references)
+def delete_or_empty_or_replace_UID(dataset: pydicom.Dataset, tag: Tuple[int, int]):
+    """X/Z/U* - X unless Z or replacement of contained instance UIDs (U) is required
+    to maintain IOD conformance (Type 3 versus Type 2 versus Type 1 sequences
+    containing UID references)
+
+    Args:
+        dataset (pydicom.Dataset): dataset to work with
+        tag (Tuple[int, int]): tag in hex notation
     """
     element = dataset.get(tag)
+    if element is None and hasattr(dataset, "file_meta"):
+        element = dataset.file_meta.get(tag)
+
     if element is not None:
         if element.VR == "UI":
             replace_element_UID(element)
@@ -244,7 +297,7 @@ def delete_or_empty_or_replace_UID(dataset, tag):
 
 # Generation functions
 
-actions_map_name_functions = {
+ACTIONS_MAP_NAME_FUNCTIONS = {
     "replace": replace,
     "empty": empty,
     "delete": delete,
@@ -255,57 +308,49 @@ actions_map_name_functions = {
     "delete_or_empty_or_replace": delete_or_empty_or_replace,
     "delete_or_empty_or_replace_UID": delete_or_empty_or_replace_UID,
     "keep": keep,
-    "regexp": regexp,
 }
 
 
-def generate_actions(tag_list: list, action, options: dict = None) -> dict:
-    """
-    Generate a dictionary using list values as tag and assign the same value to all
+def generate_actions(tag_list: TagList, action: str) -> ActionsDict:
+    """Generate a dictionary using list values as tag and assign
+    the same value to all
 
-    :param tag_list: list of tags which will have the same associated actions
-    :param action: define the action that will be use. It can be a callable custom function or a name of a pre-defined
-    action from simpledicomanonymizer.
-    :param options: Define options tht will be affected to the action (like regexp)
+    Args:
+        tag_list (TagList): List of tags to apply action
+        action (str): action type
+
+    Returns:
+        ActionsDict: mapping of tag -> required action callable
     """
-    final_action = action
-    if not callable(action):
-        final_action = (
-            actions_map_name_functions[action]
-            if action in actions_map_name_functions
-            else keep
-        )
-    if options is not None:
-        final_action = final_action(options)
+    assert isinstance(action, str) and action in ACTIONS_MAP_NAME_FUNCTIONS
+    final_action = ACTIONS_MAP_NAME_FUNCTIONS[action]
     return {tag: final_action for tag in tag_list}
 
 
-def initialize_actions() -> dict:
-    """Initialize anonymization actions with DICOM standard values
+def initialize_actions(
+    act_to_tag_list_map: Dict[str, TagList] = ACTION_TO_TAG_LIST
+) -> ActionsDict:
+    """Initialize a mapping of tag -> action func. Default is as required by
+    DICOM-standard basic de-identification profile
+
+    Args:
+        act_to_tag_list_map (Dict[str, TagList], optional): mapping of action
+        (as a str) -> list of tags. Defaults to ACTION_TO_TAG_LIST.
 
     Returns:
-        dict: mapping of tag -> action
+        ActionsDict: mapping of tag -> action function
     """
-    anonymization_actions = generate_actions(D_TAGS, replace)
-    anonymization_actions.update(generate_actions(Z_TAGS, empty))
-    anonymization_actions.update(generate_actions(X_TAGS, delete))
-    anonymization_actions.update(generate_actions(U_TAGS, replace_UID))
-    anonymization_actions.update(generate_actions(Z_D_TAGS, empty_or_replace))
-    anonymization_actions.update(generate_actions(X_Z_TAGS, delete_or_empty))
-    anonymization_actions.update(generate_actions(X_D_TAGS, delete_or_replace))
-    anonymization_actions.update(
-        generate_actions(X_Z_D_TAGS, delete_or_empty_or_replace)
-    )
-    anonymization_actions.update(
-        generate_actions(X_Z_U_STAR_TAGS, delete_or_empty_or_replace_UID)
-    )
+    anonymization_actions = {}
+    for act, tag_list in act_to_tag_list_map.items():
+        _dict = generate_actions(tag_list, act)
+        anonymization_actions.update(_dict)
     return anonymization_actions
 
 
 def anonymize_dicom_file(
     in_file: Path_Str,
     out_file: Path_Str,
-    extra_anonymization_rules: dict = None,
+    extra_anonymization_rules: Optional[ActionsDict] = None,
     delete_private_tags: bool = True,
     ds_callback: Optional[Callable[[pydicom.Dataset], None]] = None,
 ) -> None:
@@ -388,11 +433,13 @@ def get_private_tags(
     :return Array of object
     """
     private_tags = []
-    for tag, action in anonymization_actions.items():
+    for tag in anonymization_actions:
+        element = None
         try:
             element = dataset.get(tag)
-        except:
-            print("Cannot get element from tag: ", tag_to_hex_strings(tag))
+        except Exception as e:
+            logger.error("Cannot get element from tag: ", tag_to_hex_strings(tag))
+            logger.exception(e)
 
         if element and element.tag.is_private:
             private_tags.append(get_private_tag(dataset, tag))
@@ -402,7 +449,7 @@ def get_private_tags(
 
 def anonymize_dataset(
     dataset: pydicom.Dataset,
-    extra_anonymization_rules: dict = None,
+    extra_anonymization_rules: Optional[ActionsDict] = None,
     delete_private_tags: bool = True,
 ) -> None:
     """Anonymize a pydicom Dataset by using anonymization rules which links an action to a tag
@@ -413,7 +460,7 @@ def anonymize_dataset(
         delete_private_tags (bool, optional): if delete private tags. Defaults to True.
 
     Raises:
-        Exception: will raise Exception if `dataset.get(tag)` failss
+        Exception: will raise Exception if `dataset.get(tag)` fails
     """
     current_anonymization_actions = initialize_actions()
 
