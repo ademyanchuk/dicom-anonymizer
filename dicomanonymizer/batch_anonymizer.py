@@ -9,7 +9,6 @@ import argparse
 import json
 import logging
 import logging.config
-import pathlib
 import random
 from pathlib import Path
 from typing import Optional
