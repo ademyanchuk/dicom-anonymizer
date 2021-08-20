@@ -44,7 +44,7 @@ def regexp(options: dict):
 # Default anonymization functions
 
 
-def replace_element_UID(element):
+def replace_element_UID(element: pydicom.DataElement):
     """
     Keep char value but replace char number with random number
     The replaced value is kept in a dictionary link to the initial element.value in order to automatically
