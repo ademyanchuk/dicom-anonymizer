@@ -1,11 +1,10 @@
 """This module wraps some state loading, holding, and saving
 functionality into python class implementation.
 """
-from dataclasses import dataclass
 import json
-from pathlib import Path
-from typing import Dict, Mapping, Optional
 from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
