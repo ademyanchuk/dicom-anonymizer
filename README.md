@@ -2,7 +2,7 @@
 
 **Current Fork Notes**
 
-Hi, this fork is breaking original project functionality, providing updated one instead.   
+Hi, this fork is breaking original project functionality, providing updated one instead.
 
 I have added batch-anonymization. It is working with nested folders of dicom-files or with a single folder.
 In short, you can give a source and destination root directories, source should contain (possibly nested) directories
