@@ -1,4 +1,5 @@
 from typing import List
+
 import pydicom
 from pydicom.dataelem import RawDataElement
 

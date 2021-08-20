@@ -22,9 +22,9 @@ from dicomanonymizer.simpledicomanonymizer import (
     initialize_actions,
 )
 from dicomanonymizer.utils import (
-    ActionsDict,
     LOGS_PATH,
     PROJ_ROOT,
+    ActionsDict,
     Path_Str,
     get_dirs,
     to_Path,

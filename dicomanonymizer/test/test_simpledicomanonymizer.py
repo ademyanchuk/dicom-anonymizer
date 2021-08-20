@@ -2,6 +2,7 @@ import random
 
 import pydicom
 import pytest
+
 from dicomanonymizer import simpledicomanonymizer as smpd
 
 
