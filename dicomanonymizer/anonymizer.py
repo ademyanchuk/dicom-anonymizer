@@ -3,11 +3,18 @@ import ast
 import json
 import os
 import sys
+
 import tqdm
 
-from .simpledicomanonymizer import *
+from .simpledicomanonymizer import anonymize_dicom_file, generate_actions
 
-def anonymize(input_path: str, output_path: str, anonymization_actions: dict, deletePrivateTags: bool) -> None:
+
+def anonymize(
+    input_path: str,
+    output_path: str,
+    anonymization_actions: dict,
+    deletePrivateTags: bool,
+) -> None:
     """
     Read data from input path (folder or file) and launch the anonymization.
 
@@ -18,42 +25,47 @@ def anonymize(input_path: str, output_path: str, anonymization_actions: dict, de
     :param deletePrivateTags: Whether to delete private tags.
     """
     # Get input arguments
-    input_folder = ''
-    output_folder = ''
+    input_folder = ""
+    output_folder = ""
 
     if os.path.isdir(input_path):
         input_folder = input_path
 
     if os.path.isdir(output_path):
         output_folder = output_path
-        if input_folder == '':
+        if input_folder == "":
             output_path = output_folder + os.path.basename(input_path)
 
-    if input_folder != '' and output_folder == '':
-        print('Error, please set a correct output folder path')
+    if input_folder != "" and output_folder == "":
+        print("Error, please set a correct output folder path")
         sys.exit()
 
     # Generate list of input file if a folder has been set
     input_files_list = []
     output_files_list = []
-    if input_folder == '':
+    if input_folder == "":
         input_files_list.append(input_path)
         output_files_list.append(output_path)
     else:
         files = os.listdir(input_folder)
         for fileName in files:
-            input_files_list.append(input_folder + '/' + fileName)
-            output_files_list.append(output_folder + '/' + fileName)
+            input_files_list.append(input_folder + "/" + fileName)
+            output_files_list.append(output_folder + "/" + fileName)
 
     progress_bar = tqdm.tqdm(total=len(input_files_list))
     for cpt in range(len(input_files_list)):
-        anonymize_dicom_file(input_files_list[cpt], output_files_list[cpt], anonymization_actions, deletePrivateTags)
+        anonymize_dicom_file(
+            input_files_list[cpt],
+            output_files_list[cpt],
+            anonymization_actions,
+            deletePrivateTags,
+        )
         progress_bar.update(1)
 
     progress_bar.close()
 
 
-def generate_actions_dictionary(map_action_tag, defined_action_map = {}) -> dict:
+def generate_actions_dictionary(map_action_tag, defined_action_map={}) -> dict:
     """
     Generate a new dictionary which maps actions function to tags
 
@@ -70,7 +82,11 @@ def generate_actions_dictionary(map_action_tag, defined_action_map = {}) -> dict
         if callable(action):
             action_function = action
         else:
-            action_function = defined_action_map[action] if action in defined_action_map else eval(action)
+            action_function = (
+                defined_action_map[action]
+                if action in defined_action_map
+                else eval(action)
+            )
 
         # Generate the map
         if cpt == 0:
@@ -82,16 +98,36 @@ def generate_actions_dictionary(map_action_tag, defined_action_map = {}) -> dict
     return generated_map
 
 
-def main(defined_action_map = {}):
+def main(defined_action_map={}):
     parser = argparse.ArgumentParser(add_help=True)
-    parser.add_argument('input', help='Path to the input dicom file or input directory which contains dicom files')
-    parser.add_argument('output', help='Path to the output dicom file or output directory which will contains dicom files')
-    parser.add_argument('-t', action='append', nargs='*', help='tags action : Defines a new action to apply on the tag.'\
-    '\'regexp\' action takes two arguments: '\
-        '1. regexp to find substring '\
-        '2. the string that will replace the previous found string')
-    parser.add_argument('--dictionary', action='store', help='File which contains a dictionary that can be added to the original one')
-    parser.add_argument('--keepPrivateTags', action='store_true', dest='keepPrivateTags', help='If used, then private tags won\'t be deleted')
+    parser.add_argument(
+        "input",
+        help="Path to the input dicom file or input directory which contains dicom files",
+    )
+    parser.add_argument(
+        "output",
+        help="Path to the output dicom file or output directory which will contains dicom files",
+    )
+    parser.add_argument(
+        "-t",
+        action="append",
+        nargs="*",
+        help="tags action : Defines a new action to apply on the tag."
+        "'regexp' action takes two arguments: "
+        "1. regexp to find substring "
+        "2. the string that will replace the previous found string",
+    )
+    parser.add_argument(
+        "--dictionary",
+        action="store",
+        help="File which contains a dictionary that can be added to the original one",
+    )
+    parser.add_argument(
+        "--keepPrivateTags",
+        action="store_true",
+        dest="keepPrivateTags",
+        help="If used, then private tags won't be deleted",
+    )
     parser.set_defaults(keepPrivateTags=False)
     args = parser.parse_args()
 
@@ -118,7 +154,7 @@ def main(defined_action_map = {}):
                 if nb_parameters == 4:
                     options = {
                         "find": current_tag_parameters[2],
-                        "replace": current_tag_parameters[3]
+                        "replace": current_tag_parameters[3],
                     }
 
                 tags_list = [ast.literal_eval(current_tag_parameters[0])]
@@ -130,9 +166,13 @@ def main(defined_action_map = {}):
                     action = action_name
 
                 if cpt == 0:
-                    new_anonymization_actions = generate_actions(tags_list, action, options)
+                    new_anonymization_actions = generate_actions(
+                        tags_list, action, options
+                    )
                 else:
-                    new_anonymization_actions.update(generate_actions(tags_list, action, options))
+                    new_anonymization_actions.update(
+                        generate_actions(tags_list, action, options)
+                    )
                 cpt += 1
 
     # Read an existing dictionary
@@ -143,19 +183,26 @@ def main(defined_action_map = {}):
                 action_name = value
                 options = None
                 if type(value) is dict:
-                    action_name = value['action']
-                    options = {
-                        "find": value['find'],
-                        "replace" : value['replace']
-                    }
+                    action_name = value["action"]
+                    options = {"find": value["find"], "replace": value["replace"]}
 
-                l = [ast.literal_eval(key)]
-                action = defined_action_map[action_name] if action_name in defined_action_map else eval(action_name)
+                tags_list = [ast.literal_eval(key)]
+                action = (
+                    defined_action_map[action_name]
+                    if action_name in defined_action_map
+                    else eval(action_name)
+                )
                 if cpt == 0:
-                    new_anonymization_actions = generate_actions(l, action, options)
+                    new_anonymization_actions = generate_actions(
+                        tags_list, action, options
+                    )
                 else:
-                    new_anonymization_actions.update(generate_actions(l, action, options))
+                    new_anonymization_actions.update(
+                        generate_actions(tags_list, action, options)
+                    )
                 cpt += 1
 
     # Launch the anonymization
-    anonymize(input_path, output_path, new_anonymization_actions, not args.keepPrivateTags)
+    anonymize(
+        input_path, output_path, new_anonymization_actions, not args.keepPrivateTags
+    )
