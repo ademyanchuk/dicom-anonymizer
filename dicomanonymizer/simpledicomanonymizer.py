@@ -58,18 +58,34 @@ def replace_element_UID(element: pydicom.DataElement):
     element.value = dictionary.get(element.value)
 
 
-def replace_element_date(element):
+def replace_element_date(element: pydicom.DataElement):
     """
     Replace date element's value with '00010101'
     """
     element.value = "00010101"
 
 
-def replace_element_date_time(element):
+def replace_element_date_time(element: pydicom.DataElement):
     """
     Replace date time element's value with '00010101010101.000000+0000'
     """
     element.value = "00010101010101.000000+0000"
+
+
+def replace_element_IS(element: pydicom.DataElement):
+    """Elements with VR == IS can have either single value
+    or multivalue (see Pixel Aspect Ratio tag for example)
+    Multiple values like [1, 1] will be replaced as [0, 0]
+    and not as just 0
+
+    Args:
+        element (pydicom.DataElement): data element
+    """
+    if isinstance(element.value, pydicom.multival.MultiValue):
+        for i, _ in enumerate(element.value):
+            element.value[i] = "0"
+    else:
+        element.value = "0"
 
 
 def replace_element(element):
@@ -96,7 +112,7 @@ def replace_element(element):
     elif element.VR == "UL":
         pass
     elif element.VR == "IS":
-        element.value = "0"
+        replace_element_IS(element)
     elif element.VR in ("FD", "FL", "SS", "US"):
         element.value = 0
     elif element.VR == "ST":
